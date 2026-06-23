@@ -30,6 +30,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `setShot + start` button also polls the snapshot for server
   confirmation before firing `start`, the same pattern the other
   three tabs use.
+- **CI: workflow no longer assumes `/Applications/Xcode_16.app`.**
+  GitHub macOS runner images ship versioned Xcode installs
+  (`Xcode_16.0.app`, `Xcode_16.1.app`, …) and rotate which one is
+  available. The workflow now uses `maxim-lobanov/setup-xcode@v1`
+  with `xcode-version: latest-stable` on the `macos-15` runner
+  (Swift 6.0 requires Xcode 16+ which `macos-14`'s default doesn't
+  provide).
 
 ### Added
 
