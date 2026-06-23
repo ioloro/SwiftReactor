@@ -33,7 +33,9 @@ public final class Reactor {
     public init(
         configuration: ReactorConfiguration,
         urlSession: URLSession = .shared,
-        transportFactory: @escaping @Sendable (ReactorConfiguration, JWTSource, String) -> any ReactorTransport = { _, _, _ in StubTransport() }
+        transportFactory: @escaping @Sendable (ReactorConfiguration, JWTSource, String) -> any ReactorTransport = { config, jwt, sessionId in
+            WebRTCTransport(configuration: config, jwt: jwt, sessionId: sessionId)
+        }
     ) {
         self.configuration = configuration
         self.urlSession = urlSession
@@ -173,6 +175,65 @@ public final class Reactor {
         let encoded = try JSONEncoder.reactor.encode(AnyEncodable(payload))
         let asAny = try JSONDecoder.reactor.decode(AnyCodable.self, from: encoded)
         try await transport.sendCommand(command, data: asAny, scope: scope, uploads: nil)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // File uploads
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Reserve a presigned upload URL with the coordinator and PUT
+    /// `data` to it. The returned ``FileRef`` is what you hand to
+    /// commands that consume files (Helios `set_image`, LingBot
+    /// `set_image`, SANA-Streaming `set_video`).
+    ///
+    /// Requires `status == .ready`; presigned URLs expire after about
+    /// 15 minutes so use the returned `FileRef` promptly.
+    public func uploadFile(data: Data, name: String, mimeType: String) async throws -> FileRef {
+        guard status == .ready else {
+            throw ReactorError(
+                code: "NOT_READY",
+                message: "Cannot upload while status is \(status). Must be .ready.",
+                component: .api,
+                recoverable: true
+            )
+        }
+        guard let coordinator else {
+            throw ReactorError(
+                code: "NO_COORDINATOR",
+                message: "uploadFile called before coordinator was wired.",
+                component: .api,
+                recoverable: false
+            )
+        }
+        let presigned = try await coordinator.uploadFile(data: data, name: name, mimeType: mimeType)
+        return FileRef(
+            uploadId: presigned.presignedId,
+            name: name,
+            mimeType: mimeType,
+            size: data.count
+        )
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Testing
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Skip the coordinator handshake and wire `Reactor` directly to
+    /// an injected transport (typically a `MockTransport`). Used by
+    /// unit tests to exercise the public surface — `sendCommand`,
+    /// `onMessage`, status flow — without a real backend.
+    ///
+    /// The transport drives the status machine the same way it would
+    /// in production: emit `.statusChanged(.connected)` and `Reactor`
+    /// flips to `.ready`. Marked `@_spi(Testing)` so it stays out of
+    /// the day-to-day public surface; opt-in with
+    /// `@_spi(Testing) import SwiftReactor`.
+    @_spi(Testing) public func connectForTesting(transport: any ReactorTransport) {
+        guard status == .disconnected else { return }
+        self.transport = transport
+        subscribeToTransport(transport)
+        sessionId = "test-session"
+        setStatus(.waiting)
     }
 
     // ─────────────────────────────────────────────────────────────────────

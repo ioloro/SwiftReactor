@@ -1,0 +1,45 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: swift build + xcodebuild test
+    runs-on: macos-14
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select --switch /Applications/Xcode_16.app
+
+      - name: Resolve packages
+        run: swift package resolve
+
+      - name: swift build
+        run: swift build
+
+      # `swift test` can't dlopen WebRTC.framework from the SwiftPM test
+      # bundle. The xcodebuild auto-generated SwiftReactor-Package
+      # scheme loads the framework correctly and exposes the test
+      # bundle (the bare SwiftReactor scheme is library-only).
+      - name: xcodebuild test
+        run: |
+          xcodebuild test \
+            -scheme SwiftReactor-Package \
+            -destination 'platform=macOS,arch=arm64' \
+            -resultBundlePath TestResults.xcresult
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults.xcresult
+          retention-days: 14

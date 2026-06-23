@@ -93,6 +93,30 @@ actor CoordinatorClient {
         try await post(path: "/sessions/\(sessionId)/uploads", body: request)
     }
 
+    /// Two-step upload: reserve a presigned URL with the coordinator,
+    /// then PUT the bytes directly to it. Returns the presigned id the
+    /// model uses to look the file up at command time.
+    func uploadFile(data: Data, name: String, mimeType: String) async throws -> CreateUploadResponse {
+        guard let sessionId = currentSessionId else {
+            throw ReactorError(
+                code: "NO_SESSION",
+                message: "uploadFile requires an active session; call connect first.",
+                component: .api,
+                recoverable: false
+            )
+        }
+        let presigned = try await createUpload(
+            sessionId: sessionId,
+            request: CreateUploadRequest(name: name, size: data.count, mimeType: mimeType)
+        )
+        var put = URLRequest(url: presigned.presignedURL)
+        put.httpMethod = "PUT"
+        put.setValue(mimeType, forHTTPHeaderField: "Content-Type")
+        let (body, response) = try await urlSession.upload(for: put, from: data)
+        try Self.validateStatus(response, data: body)
+        return presigned
+    }
+
     private func get<Response: Decodable>(path: String) async throws -> Response {
         var request = try makeRequest(path: path, method: "GET")
         try await authorize(&request)
