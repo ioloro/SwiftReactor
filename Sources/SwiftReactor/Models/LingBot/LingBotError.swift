@@ -2,8 +2,8 @@ import Foundation
 
 public extension LingBot {
 
-    /// Errors thrown by ``LingBotSession`` before a command reaches the
-    /// server.
+    /// Errors thrown by `ReactorSession<LingBot>` before a command
+    /// reaches the server.
     enum LocalError: Error, Sendable, Equatable, CustomStringConvertible {
         /// Tried to `start()` while a run is already in progress.
         case alreadyStarted

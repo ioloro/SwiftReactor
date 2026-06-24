@@ -6,6 +6,110 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed (breaking)
+
+- **One typed session class for the whole SDK.** The four per-model
+  classes (`LongLiveV2Session`, `HeliosSession`, `LingBotSession`,
+  `SanaStreamingSession`) collapse into a single generic
+  `ReactorSession<Model>` parameterised by a `ReactorModelKind`
+  conformer. Per-model command surfaces (`setShot`, `setMovement`,
+  …) live in constrained extensions, so **wrong-model commands are
+  a compile error** rather than a runtime trap. New spelling:
+  ```swift
+  let session = try await ReactorSession<LongLiveV2>.connect()
+  ```
+  Existing call sites in tests, demo, and consumer projects need a
+  one-line update per session — see CHANGELOG diff.
+- **`ReactorModel.longLive` → `.longLiveV2`** so the case name
+  matches the namespace it picks. Other three (`.helios`,
+  `.lingbot`, `.sanaStreaming`) unchanged. Models stay specific +
+  versioned where Reactor versions them.
+
+- **`SwiftReactor` namespace folded into `Reactor` class statics.**
+  `SwiftReactor.configure(jwt:)` → `Reactor.configure(jwt:)`;
+  `SwiftReactor.logLevel` → `Reactor.logLevel`;
+  `SwiftReactor.Error.notConfigured` →
+  `Reactor.ConfigurationError.notConfigured`. The old `SwiftReactor`
+  enum collided with the module name `SwiftReactor`, breaking any
+  consumer with its own `ReactorSession` type (e.g. Sunnyside Golf,
+  which couldn't write `SwiftReactor.ReactorSession<LongLiveV2>`
+  cleanly). Folding the surface onto `Reactor` matches RevenueCat's
+  `Purchases.configure(...)` pattern exactly and removes the
+  collision.
+
+### Added
+
+- **`ReactorModelKind` protocol** that the four namespace enums
+  (`LongLiveV2`, `Helios`, `LingBot`, `SanaStreaming`) conform to.
+  Pins each model's `StateMessage`, `CommandErrorMessage`,
+  `Message`, `LocalError` associated types plus the static
+  `asModel`, `decode(payload:)`, `extractState`,
+  `extractCommandError`, `isGenerationComplete`,
+  `snapshotIndicatesStopped` glue `ReactorSession` needs.
+- **`ReactorConfiguration(model:)`** typed init to pair the
+  `ReactorModel` enum at the configuration level too.
+
+## [0.3.0] - 2026-06-24
+
+Ergonomic pass. The headline change: typed-session `.connect()` is now
+a one-line factory, and you can install a default `JWTSource` once at
+app launch via `Reactor.configure(jwt:)` so subsequent calls
+don't thread credentials through every view.
+
+### Added
+
+- **`ReactorModel` enum** with cases `.longLiveV2`, `.helios`, `.lingbot`,
+  `.sanaStreaming`, `.custom(String)`. Prefer this over the raw string
+  `Reactor(modelName: "longlive-v2")` initializer — typos become
+  compile errors, autocomplete surfaces every typed wrapper, and the
+  case docs explain each model at the call site. `Reactor(model:)`
+  convenience init delegates to the existing modelName path.
+- **`Reactor.configure(jwt:)`** — module-level default `JWTSource`,
+  mirroring RevenueCat's `Purchases.configure(...)` pattern. Set once
+  at app launch; every typed session's no-arg `.connect()` picks it
+  up. Per-call `.connect(jwt: …)` still works and overrides.
+- **`Reactor.logLevel`** — `.debug`/`.info`/`.warning`/`.error`
+  verbosity dial for the SDK's OSLog output, mirroring
+  `Purchases.logLevel`.
+- **Per-session `.connect(...)` static factories** on every typed
+  wrapper (`LongLiveV2Session`, `HeliosSession`, `LingBotSession`,
+  `SanaStreamingSession`). Instantiate, connect, and return a ready
+  session in one `try await`. Two overloads each: explicit
+  `jwt:` argument, or no-arg pulling from `Reactor.sharedJWT`.
+- **`JWTSource.provider(_:)` static factory** — same shape as the
+  existing closure-init but reads better at call sites:
+  `JWTSource.provider { try await fetchJWT() }`. The recommended
+  pattern.
+- **`DevJWTMinter`** in `SwiftReactorDemoSupport`. POSTs `/tokens`
+  with your `rk_…` key and returns a JWT. Lives in the support target
+  on purpose — pulling it in requires adding `SwiftReactorDemoSupport`
+  to your `Package.swift`, which is the friction that keeps the
+  unsafe path out of production code by autocomplete. Mirrors the
+  pattern of Python SDK's `fetch_jwt_token(api_key=…)`. First use
+  logs a one-time warning to OSLog.
+- **Tests for the new ergonomic surface**: `ReactorModelTests` pins
+  the wire-name mapping for every case; `SwiftReactorConfigureTests`
+  covers `configure(jwt:)` round-trip and the `notConfigured` error
+  path for every session; `DevJWTMinterTests` exercises the happy
+  path, header correctness, HTTP error surfacing, and the
+  `jwtSource(apiKey:)` convenience via a `URLProtocol` stub.
+
+### Changed
+
+- **Demo app's `DemoSettings`** now uses
+  `DevJWTMinter.jwtSource(apiKey:)` instead of inlining the
+  `POST /tokens` flow. Demonstrates the recommended dev-only path.
+- **README quickstart** rewritten — leads with the 2-step
+  `Reactor.configure(...)` + `LongLiveV2Session.connect()` flow.
+  Auth section shows the three modes (`.provider`, `.staticToken`,
+  `DevJWTMinter`) in order of safety with a 🚨 callout for the dev
+  helper. Generic `Reactor` + `sendCommand` is now a "Custom models"
+  section at the bottom rather than the headline pattern.
+- **AGENTS.md** updated to match the new patterns end-to-end.
+- **License section** of the README corrected from MIT to Apache 2.0
+  to match the actual `LICENSE` file.
+- **`ReactorConfiguration.currentSDKVersion`** bumped to `0.3.0`.
+
 ### Fixed
 
 - **Demo app: `TextField` no longer silently swallows keystrokes.**

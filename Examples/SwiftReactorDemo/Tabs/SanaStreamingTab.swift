@@ -20,7 +20,7 @@ import UniformTypeIdentifiers
 ///     the demo surfaces this honestly rather than pretending.
 struct SanaStreamingTab: View {
     @EnvironmentObject private var settings: DemoSettings
-    @State private var session = SanaStreamingSession()
+    @State private var session = ReactorSession<SanaStreaming>()
     @State private var connectError: String?
     @State private var prompt: String = "Turn it into a hand-painted watercolor with warm light."
     @State private var videoData: Data?
@@ -300,7 +300,7 @@ struct SanaStreamingTab: View {
     private func toggleConnection() async {
         if session.status == .disconnected {
             do {
-                try await session.connect(jwt: settings.makeJWTSource())
+                try await session.reactor.connect(jwt: settings.makeJWTSource())
                 connectError = nil
             } catch {
                 connectError = "\(error)"

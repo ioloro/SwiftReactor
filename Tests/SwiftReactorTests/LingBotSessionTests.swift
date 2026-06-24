@@ -141,13 +141,13 @@ struct LingBotSessionTests {
     // Helpers
     // ─────────────────────────────────────────────────────────────────
 
-    private func makeReadySession() async throws -> (LingBotSession, MockTransport) {
+    private func makeReadySession() async throws -> (ReactorSession<LingBot>, MockTransport) {
         let mock = MockTransport()
         let reactor = Reactor(
             configuration: ReactorConfiguration(modelName: "lingbot"),
             transportFactory: { _, _, _ in mock }
         )
-        let session = LingBotSession(reactor: reactor)
+        let session = ReactorSession<LingBot>(reactor: reactor)
         reactor.connectForTesting(transport: mock)
         await mock.simulateReady()
         try await tinyWait()

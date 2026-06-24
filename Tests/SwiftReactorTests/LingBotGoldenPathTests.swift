@@ -182,13 +182,13 @@ struct LingBotGoldenPathTests {
         ]
     }
 
-    private func makeReadySession(autoResetOnComplete: Bool) async throws -> (LingBotSession, MockTransport) {
+    private func makeReadySession(autoResetOnComplete: Bool) async throws -> (ReactorSession<LingBot>, MockTransport) {
         let mock = MockTransport()
         let reactor = Reactor(
             configuration: ReactorConfiguration(modelName: "lingbot"),
             transportFactory: { _, _, _ in mock }
         )
-        let session = LingBotSession(reactor: reactor, autoResetOnComplete: autoResetOnComplete)
+        let session = ReactorSession<LingBot>(reactor: reactor, autoResetOnComplete: autoResetOnComplete)
         reactor.connectForTesting(transport: mock)
         await mock.simulateReady()
         try await tinyWait()

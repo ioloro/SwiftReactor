@@ -17,7 +17,7 @@ import SwiftReactorDemoSupport
 ///     cap so you see the cut-or-die boundary.
 struct LongLiveTab: View {
     @EnvironmentObject private var settings: DemoSettings
-    @State private var session = LongLiveV2Session()
+    @State private var session = ReactorSession<LongLiveV2>()
     @State private var connectError: String?
     @State private var prompt: String = "A cinematic aerial flyover of a sun-drenched coastal cliff, slow drone push-in."
     @State private var scheduleOffset: Int = 5
@@ -253,7 +253,7 @@ struct LongLiveTab: View {
     private func toggleConnection() async {
         if session.status == .disconnected {
             do {
-                try await session.connect(jwt: settings.makeJWTSource())
+                try await session.reactor.connect(jwt: settings.makeJWTSource())
                 connectError = nil
             } catch {
                 connectError = "\(error)"

@@ -22,7 +22,7 @@ import UniformTypeIdentifiers
 ///     server-side `[start] No prompt set` rejection.
 struct HeliosTab: View {
     @EnvironmentObject private var settings: DemoSettings
-    @State private var session = HeliosSession()
+    @State private var session = ReactorSession<Helios>()
     @State private var connectError: String?
     @State private var prompt: String = "A misty fjord at golden hour, painterly atmosphere, gentle drone motion."
     @State private var refImageData: Data?
@@ -317,7 +317,7 @@ struct HeliosTab: View {
     private func toggleConnection() async {
         if session.status == .disconnected {
             do {
-                try await session.connect(jwt: settings.makeJWTSource())
+                try await session.reactor.connect(jwt: settings.makeJWTSource())
                 connectError = nil
             } catch {
                 connectError = "\(error)"

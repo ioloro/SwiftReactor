@@ -112,8 +112,9 @@ public extension LongLiveV2 {
     /// Emitted when every chunk of a run has streamed. The session
     /// returns to idle (`started=false`) and is **locked**: every
     /// command (including `set_shot`) rejects with `command_error`
-    /// until the client calls `reset`. `LongLiveV2Session` handles this
-    /// automatically when `autoResetOnComplete` is true (default).
+    /// until the client calls `reset`. `ReactorSession<LongLiveV2>`
+    /// handles this automatically when `autoResetOnComplete` is true
+    /// (default).
     struct GenerationCompleteMessage: Decodable, Sendable, Equatable {
         public let totalChunks: Int
     }

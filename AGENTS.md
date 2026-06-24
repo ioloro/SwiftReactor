@@ -9,9 +9,13 @@ top-to-bottom before generating code.
 
 - **What it is.** Native Swift client for Reactor.inc's real-time
   video-generation API. Mirrors the official JS / Python SDKs.
-- **What it gives you.** A generic `Reactor` class plus four typed
-  model wrappers (`LongLiveV2Session`, `HeliosSession`,
-  `LingBotSession`, `SanaStreamingSession`).
+- **What it gives you.** A generic `Reactor` class plus a single
+  generic typed session `ReactorSession<Model>` parameterised by one
+  of the four supported model namespaces (`LongLiveV2`, `Helios`,
+  `LingBot`, `SanaStreaming`). Per-model commands live in
+  constrained extensions, so e.g. `setMovement(.forward)` on a
+  `ReactorSession<LongLiveV2>` is a **compile error** — wrong-model
+  commands can't be called by accident.
 - **How you call it.** `connect(jwt:)` → wait for `.ready` → typed
   command methods → `disconnect()`. Display the model's `main_video`
   with `ReactorView(reactor:)`.
@@ -24,27 +28,51 @@ top-to-bottom before generating code.
 
 ```swift
 // In your Package.swift
-.package(url: "https://github.com/ioloro/SwiftReactor", from: "0.2.0"),
+.package(url: "https://github.com/ioloro/SwiftReactor", from: "0.3.0"),
 ```
 
 For an Xcode app, add the package via File → Add Packages…, select
 SwiftReactor, target the framework.
 
-## Connecting
-
-You need a JWT. The Reactor coordinator issues JWTs in exchange for an
-API key (`rk_…`). **Do not ship the raw API key with the client
-binary.** Mint JWTs server-side and hand them to the SDK:
+## Connecting (the easy path)
 
 ```swift
 import SwiftReactor
 
-// Option 1 — string literal (dev only).
-let reactor = Reactor(modelName: "longlive-v2")
-try await reactor.connect(jwt: "eyJhbGciOi…")
+// At app launch — once.
+Reactor.configure(jwt: .provider {
+    try await myBackend.mintReactorJWT()
+})
 
-// Option 2 — async closure (prod). Runs on every coordinator call.
-try await reactor.connect(jwt: JWTSource { try await fetchJWT() })
+// Anywhere — one line from zero to a connected, typed session.
+let session = try await ReactorSession<LongLiveV2>.connect()
+```
+
+All four typed sessions have the same `.connect()` static. Without a
+prior `Reactor.configure(jwt:)`, the no-arg overload throws
+`Reactor.ConfigurationError.notConfigured`. You can also override per-call:
+
+```swift
+let session = try await ReactorSession<LongLiveV2>.connect(jwt: .provider { … })
+let session = try await ReactorSession<LongLiveV2>.connect(jwt: "eyJhbGci…")
+```
+
+### Auth modes
+
+- `JWTSource.provider { … }` — your closure mints a JWT from your
+  backend on every coordinator call. **Recommended.**
+- `JWTSource.staticToken(_:)` — you handed the SDK an already-minted
+  opaque JWT. Safe.
+- `DevJWTMinter.fetchJWT(apiKey:)` (in `SwiftReactorDemoSupport`,
+  not the core SDK) — mints a JWT directly from an `rk_…` key. For
+  **local development, sample apps, CI scripts only**. Anyone with
+  the binary can extract the API key.
+
+```swift
+// Don't do this in production — but this is what samples / demos do:
+import SwiftReactorDemoSupport
+let jwt = try await DevJWTMinter.fetchJWT(apiKey: "rk_…")
+let session = try await ReactorSession<LongLiveV2>.connect(jwt: .staticToken(jwt))
 ```
 
 `status` walks `disconnected → connecting → waiting → ready`. Only
@@ -52,12 +80,17 @@ issue commands once `status == .ready` (typed wrappers enforce this).
 
 ## Picking a model
 
-| Model name | Use when you want… | Typed wrapper |
+Use the typed wrapper's `.connect()` factory for any of the four
+supported models — no need to spell the wire name yourself. For
+custom models, drop down to `Reactor(model: .custom("name"))`.
+
+| ReactorModel case | Wire name | Typed wrapper |
 | --- | --- | --- |
-| `longlive-v2` | Multi-shot narrative video (scenes, cuts, scheduling). Per-scene 48-chunk budget; `sceneCut` to extend. | `LongLiveV2Session` |
-| `helios` | Image-conditioned real-time stream. Schedulable prompt changes, optional 2x/4x SR. | `HeliosSession` |
-| `lingbot` | Action-controlled world (FPS / open-world feel). Sticky `movement` + `look*` inputs. | `LingBotSession` |
-| `sana-streaming` | Video-to-video editing of an existing clip (or live camera in v0.3). Anchor re-grounding. | `SanaStreamingSession` |
+| `.longLiveV2` | `longlive-v2` | `ReactorSession<LongLiveV2>` |
+| `.helios` | `helios` | `ReactorSession<Helios>` |
+| `.lingbot` | `lingbot` | `ReactorSession<LingBot>` |
+| `.sanaStreaming` | `sana-streaming` | `ReactorSession<SanaStreaming>` |
+| `.custom(String)` | (verbatim) | — use generic `Reactor` + `sendCommand` |
 
 **Always prefer the typed wrapper** when one exists for your model.
 The wrappers encode the exact wire schema documented at
@@ -68,35 +101,39 @@ server defaults the missing field).
 ## Mental model
 
 ```
-┌────────────────┐
-│  Reactor       │  generic transport + sendCommand + uploadFile
-└────────────────┘
-        ▲
-        │ wraps
-        │
-┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────┐
-│ LongLiveV2Session│  │ HeliosSession    │  │ LingBotSession   │  │ SanaStreamingSession│
-└──────────────────┘  └──────────────────┘  └──────────────────┘  └────────────────────┘
-        │                 │                    │                       │
-        │                 │                    │                       │
-        ▼                 ▼                    ▼                       ▼
-   set_shot          set_prompt          set_movement            set_video
-   scene_cut         set_image           set_look_horizontal     set_mode
-   schedule_shot     set_conditioning    set_look_vertical       set_anchor_interval
-   schedule_scene_cut schedule_prompt    set_rotation_speed_deg  …
-   start / pause /   set_sr_scale        start / …               …
-   resume / reset    set_image_strength
+                  ┌────────────────┐
+                  │  Reactor       │  generic transport + sendCommand + uploadFile
+                  └────────────────┘
+                          ▲
+                          │ wraps
+                          │
+              ┌─────────────────────────────┐
+              │ ReactorSession<Model>       │  shared state machine
+              └─────────────────────────────┘
+              ┌─────────┬─────────┬─────────┬───────────────┐
+              ▼         ▼         ▼         ▼
+       LongLiveV2    Helios    LingBot    SanaStreaming        (Model namespaces — params, messages,
+                                                                error types, ReactorModelKind conform)
+
+   extension ReactorSession where Model == LongLiveV2  →  setShot, sceneCut, schedule*, …
+   extension ReactorSession where Model == Helios      →  setPrompt, setImage, setConditioning, …
+   extension ReactorSession where Model == LingBot     →  setMovement, setLookHorizontal, …
+   extension ReactorSession where Model == SanaStreaming →  setMode, setVideo, setAnchorInterval, …
 ```
 
-All wrappers share the same `connect(jwt:)`, `disconnect()`, and
-typed-callback surface (`onState`, `onCommandError`, `onChunkComplete`).
-All commands `throw` and require `Reactor.status == .ready`.
+The same `connect(jwt:)`, `disconnect()`, `onState`,
+`onCommandError`, `onChunkComplete` exist regardless of model. The
+per-model command sets are constrained extensions, so wrong-model
+calls are a **compile error**, not a runtime throw.
 
-## Lifecycle every wrapper follows
+## Lifecycle every session follows
 
 ```swift
-let session = SomeModelSession()             // model wrapper
-try await session.connect(jwt: jwtSource)    // walks status → .ready
+// Preferred form — one expression.
+let session = try await ReactorSession<LongLiveV2>.connect()   // uses configured JWT
+// Or with explicit jwt:
+let session = try await ReactorSession<LongLiveV2>.connect(jwt: .provider { … })
+
 // (Render UI: ReactorView(reactor: session.reactor).)
 
 // Send commands per the model's documented opener.
@@ -133,7 +170,7 @@ await session.disconnect()
   shipping a wire-rejected `start`.
 - `generation_complete` locks the session server-side. The wrapper
   auto-fires `reset` so subsequent commands work; disable with
-  `LongLiveV2Session(autoResetOnComplete: false)`.
+  `ReactorSession<LongLiveV2>(autoResetOnComplete: false)`.
 - Per-scene budget is 48 chunks (~58s). `sceneCut` to extend; the
   per-scene counter resets, the cumulative `session_chunk` keeps
   counting.
@@ -164,7 +201,7 @@ await session.disconnect()
 ### SANA-Streaming
 
 - Live camera input (`set_mode(.live)`) requires sendonly
-  `publishTrack` support, which is a v0.2 SDK stub. The typed wrapper
+  `publishTrack` support, which is a v0.3 SDK stub. The typed wrapper
   throws `SanaStreaming.LocalError.liveModeNotYetSupported` to keep
   the SDK honest about what it can actually deliver end-to-end.
 - File mode (`set_mode(.file)` + `setVideo(ref)`) works today.
@@ -236,7 +273,7 @@ import Testing
         configuration: .init(modelName: "longlive-v2"),
         transportFactory: { _, _, _ in mock }
     )
-    let session = LongLiveV2Session(reactor: reactor)
+    let session = ReactorSession<LongLiveV2>(reactor: reactor)
     reactor.connectForTesting(transport: mock)
     await mock.simulateReady()
 
@@ -297,6 +334,11 @@ what you expect. Walk through:
 
 ## Versions
 
+- **0.3.0** — Ergonomic pass: `ReactorModel` enum + `Reactor(model:)`,
+  per-session `.connect(...)` static factories, RevenueCat-style
+  `Reactor.configure(jwt:)` + no-arg `.connect()`, `logLevel`,
+  `DevJWTMinter` moved to `SwiftReactorDemoSupport` so the unsafe path
+  requires extra friction at the package level.
 - **0.2.0** — Helios, LingBot, SANA-Streaming typed wrappers; `FileRef`
   + `Reactor.uploadFile`; demo app; README + `AGENTS.md` polish.
 - **0.1.0** — Initial release. Generic `Reactor` + `LongLiveV2Session`.

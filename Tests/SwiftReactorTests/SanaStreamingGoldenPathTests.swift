@@ -179,13 +179,13 @@ struct SanaStreamingGoldenPathTests {
         ]
     }
 
-    private func makeReadySession(autoResetOnComplete: Bool) async throws -> (SanaStreamingSession, MockTransport) {
+    private func makeReadySession(autoResetOnComplete: Bool) async throws -> (ReactorSession<SanaStreaming>, MockTransport) {
         let mock = MockTransport()
         let reactor = Reactor(
             configuration: ReactorConfiguration(modelName: "sana-streaming"),
             transportFactory: { _, _, _ in mock }
         )
-        let session = SanaStreamingSession(reactor: reactor, autoResetOnComplete: autoResetOnComplete)
+        let session = ReactorSession<SanaStreaming>(reactor: reactor, autoResetOnComplete: autoResetOnComplete)
         reactor.connectForTesting(transport: mock)
         await mock.simulateReady()
         try await tinyWait()

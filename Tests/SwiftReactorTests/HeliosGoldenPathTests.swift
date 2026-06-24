@@ -144,13 +144,13 @@ struct HeliosGoldenPathTests {
         ]
     }
 
-    private func makeReadySession() async throws -> (HeliosSession, MockTransport) {
+    private func makeReadySession() async throws -> (ReactorSession<Helios>, MockTransport) {
         let mock = MockTransport()
         let reactor = Reactor(
             configuration: ReactorConfiguration(modelName: "helios"),
             transportFactory: { _, _, _ in mock }
         )
-        let session = HeliosSession(reactor: reactor)
+        let session = ReactorSession<Helios>(reactor: reactor)
         reactor.connectForTesting(transport: mock)
         await mock.simulateReady()
         try await tinyWait()

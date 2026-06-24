@@ -41,6 +41,24 @@ public struct ReactorConfiguration: Sendable {
         self.sdkVersion = sdkVersion
     }
 
+    /// Typed convenience using ``ReactorModel``. Prefer this over the
+    /// raw `modelName` init in new code — typos are compile errors.
+    public init(
+        model: ReactorModel,
+        baseURL: URL = ReactorConfiguration.productionBaseURL,
+        apiVersion: Int = 1,
+        webRTCVersion: String = "1.0",
+        sdkVersion: String = ReactorConfiguration.currentSDKVersion
+    ) {
+        self.init(
+            modelName: model.wireName,
+            baseURL: baseURL,
+            apiVersion: apiVersion,
+            webRTCVersion: webRTCVersion,
+            sdkVersion: sdkVersion
+        )
+    }
+
     /// Production coordinator at `https://api.reactor.inc`.
     public static let productionBaseURL: URL = {
         // Use components rather than force-unwrap so the SDK fails loudly
@@ -71,5 +89,5 @@ public struct ReactorConfiguration: Sendable {
 
     /// Current SwiftReactor release. Sent to the coordinator as
     /// `client_info.sdk_version`.
-    public static let currentSDKVersion = "0.2.0"
+    public static let currentSDKVersion = "0.3.0"
 }

@@ -2,10 +2,10 @@ import Foundation
 
 public extension LongLiveV2 {
 
-    /// Errors thrown by `LongLiveV2Session` *before* a command would be
-    /// sent to the server — caught locally by the state machine. Server-
-    /// originated rejections come back as `LongLiveV2.Message.commandError`
-    /// instead.
+    /// Errors thrown by `ReactorSession<LongLiveV2>` *before* a
+    /// command would be sent to the server — caught locally by the
+    /// state machine. Server-originated rejections come back as
+    /// `LongLiveV2.Message.commandError` instead.
     enum LocalError: Error, Sendable, Equatable, CustomStringConvertible {
         /// Tried to `start()` while a run is already in progress. The
         /// state machine tracks `started` from incoming state messages

@@ -16,7 +16,7 @@ public enum SanaStreaming {
         /// `publishTrack` on the transport — currently a SwiftReactor
         /// v0.2 stub; track this in the v0.3 milestone.
         case live
-        /// Pre-uploaded clip via ``SanaStreamingSession/setVideo(_:)``.
+        /// Pre-uploaded clip via `ReactorSession<SanaStreaming>.setVideo(_:)`.
         /// File mode auto-completes when the clip's last frame ships.
         case file
     }

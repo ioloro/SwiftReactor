@@ -43,13 +43,6 @@ public final class Reactor {
         (self.events, self.eventsContinuation) = AsyncStream.makeStream(of: ReactorEvent.self)
     }
 
-    public convenience init(
-        modelName: String,
-        baseURL: URL = ReactorConfiguration.productionBaseURL
-    ) {
-        self.init(configuration: ReactorConfiguration(modelName: modelName, baseURL: baseURL))
-    }
-
     // ─────────────────────────────────────────────────────────────────────
     // Connection lifecycle
     // ─────────────────────────────────────────────────────────────────────

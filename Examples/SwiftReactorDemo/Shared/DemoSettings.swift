@@ -1,5 +1,6 @@
 import Foundation
 import SwiftReactor
+import SwiftReactorDemoSupport
 
 /// Shared app settings — credentials + a single JWT source that all
 /// tabs read. Stored in `UserDefaults` so a paste-once-run-many flow
@@ -23,47 +24,30 @@ final class DemoSettings: ObservableObject {
         defaults.set(staticJWT, forKey: "demo.reactor.jwt")
     }
 
-    /// Build a `JWTSource` that either returns the pasted JWT or mints
-    /// one from the API key. The mint endpoint is the standard Reactor
-    /// coordinator token endpoint.
-    func makeJWTSource() -> JWTSource {
-        let token = staticJWT
-        let key = apiKey
-        if !token.isEmpty {
-            return .staticToken(token)
+    /// Build a `JWTSource` — pre-minted token wins over the API-key
+    /// path. `DevJWTMinter.jwtSource(apiKey:)` lives in the
+    /// `SwiftReactorDemoSupport` target on purpose: it's a development
+    /// helper, not part of the SDK's safe public surface. Production
+    /// apps should mint JWTs in a backend and use
+    /// `JWTSource.provider { … }` instead.
+    func makeJWTSource() throws -> JWTSource {
+        if !staticJWT.isEmpty {
+            return .staticToken(staticJWT)
         }
-        return JWTSource {
-            try await Self.mintJWT(apiKey: key)
-        }
-    }
-
-    private static func mintJWT(apiKey: String) async throws -> String {
         guard !apiKey.isEmpty else {
             throw DemoError.missingCredentials
         }
-        var req = URLRequest(url: URL(string: "https://api.reactor.inc/tokens")!)
-        req.httpMethod = "POST"
-        req.setValue(apiKey, forHTTPHeaderField: "Reactor-API-Key")
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw DemoError.mintFailed("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1): \(body)")
-        }
-        struct R: Decodable { let jwt: String }
-        return try JSONDecoder().decode(R.self, from: data).jwt
+        return DevJWTMinter.jwtSource(apiKey: apiKey)
     }
 }
 
 enum DemoError: LocalizedError {
     case missingCredentials
-    case mintFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .missingCredentials:
             return "No JWT and no REACTOR_API_KEY — paste either one in Settings."
-        case .mintFailed(let detail):
-            return "JWT mint failed: \(detail)"
         }
     }
 }

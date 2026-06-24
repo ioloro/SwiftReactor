@@ -2,8 +2,8 @@ import Foundation
 
 public extension Helios {
 
-    /// Errors thrown by ``HeliosSession`` *before* a command reaches the
-    /// server. Server-originated rejections come back as
+    /// Errors thrown by `ReactorSession<Helios>` *before* a command
+    /// reaches the server. Server-originated rejections come back as
     /// ``Helios/Message/commandError`` instead.
     enum LocalError: Error, Sendable, Equatable, CustomStringConvertible {
         /// Tried to `start()` while a run is already in progress. The

@@ -192,13 +192,13 @@ struct LongLiveV2GoldenPathTests {
         ]
     }
 
-    private func makeReadySession(autoResetOnComplete: Bool) async throws -> (LongLiveV2Session, MockTransport) {
+    private func makeReadySession(autoResetOnComplete: Bool) async throws -> (ReactorSession<LongLiveV2>, MockTransport) {
         let mock = MockTransport()
         let reactor = Reactor(
             configuration: ReactorConfiguration(modelName: "longlive-v2"),
             transportFactory: { _, _, _ in mock }
         )
-        let session = LongLiveV2Session(reactor: reactor,
+        let session = ReactorSession<LongLiveV2>(reactor: reactor,
                                         autoResetOnComplete: autoResetOnComplete)
         reactor.connectForTesting(transport: mock)
         await mock.simulateReady()

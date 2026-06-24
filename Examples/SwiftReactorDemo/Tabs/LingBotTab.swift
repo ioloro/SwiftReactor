@@ -19,7 +19,7 @@ import SwiftReactorDemoSupport
 ///     the `_deg` suffix.
 struct LingBotTab: View {
     @EnvironmentObject private var settings: DemoSettings
-    @State private var session = LingBotSession()
+    @State private var session = ReactorSession<LingBot>()
     @State private var connectError: String?
     @State private var prompt: String = "Medieval village at dusk, cobblestone streets, glowing windows, smoke curling from chimneys."
     @State private var refImageData: Data?
@@ -311,7 +311,7 @@ struct LingBotTab: View {
     private func toggleConnection() async {
         if session.status == .disconnected {
             do {
-                try await session.connect(jwt: settings.makeJWTSource())
+                try await session.reactor.connect(jwt: settings.makeJWTSource())
                 connectError = nil
             } catch {
                 connectError = "\(error)"
