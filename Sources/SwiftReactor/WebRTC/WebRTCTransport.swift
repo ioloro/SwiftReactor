@@ -486,10 +486,24 @@ final class PeerConnectionDelegateProxy: NSObject, RTCPeerConnectionDelegate, @u
         }
     }
     func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
-        nonisolated(unsafe) let receiver = rtpReceiver
-        nonisolated(unsafe) let streams = mediaStreams
-        Task { [weak owner] in await owner?.didAddReceiver(receiver, streams: streams) }
+        // Swift 6 strict concurrency rejects sending `[RTCMediaStream]`
+        // into the actor-isolated method, even with `nonisolated(unsafe)
+        // let` on the local — the Array's Sendable conformance is the
+        // problem, not the binding. Box both values in an @unchecked
+        // Sendable struct so the Task closure only captures something
+        // the compiler will agree is Sendable. The WebRTC objects are
+        // RTC C++ shims, internally thread-safe; the @unchecked is
+        // honest, not a lie.
+        let payload = AddReceiverPayload(receiver: rtpReceiver, streams: mediaStreams)
+        Task { [weak owner] in
+            await owner?.didAddReceiver(payload.receiver, streams: payload.streams)
+        }
     }
+}
+
+private struct AddReceiverPayload: @unchecked Sendable {
+    let receiver: RTCRtpReceiver
+    let streams: [RTCMediaStream]
 }
 
 final class DataChannelDelegateProxy: NSObject, RTCDataChannelDelegate, @unchecked Sendable {
